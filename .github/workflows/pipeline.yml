@@ -2,26 +2,44 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  build:
+  build-test-scan:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    # 1. Hämta koden
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+    # 2. Installera Node och kör tester
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run Tests
+      run: npm test
 
-      # TODO: Add your steps here
-      # - Install dependencies
-      # - Run tests
-      # - Build Docker image
-      # - Scan with Trivy
-      # - Deploy to hosting service
+    # 3. Bygg Docker-containern
+    - name: Build Docker Image
+      run: docker build -t first-pipeline:${{ github.sha }} .
+
+    # 4. Kör säkerhetsskanning (Trivy)
+    # OBS: Vi sätter exit-code 0 så pipelinen INTE stannar även om den hittar fel (enligt instruktion)
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'first-pipeline:${{ github.sha }}'
+        format: 'table'
+        exit-code: '0'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
+
